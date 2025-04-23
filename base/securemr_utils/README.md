@@ -6,9 +6,39 @@ codes can easily overflow the essential MR logics. Hence,
 to simplify the major logics in our samples, and also to
 ease the usage of SecureMR, we build these utility classes.
 
+These SecureMR utility classes are designed for handling tensor
+operations, pipeline execution, and rendering commands in a flexiable
+manner, using smart pointers to automatically manage the lifecycles,
+type casting and templates to ease the intialization and data transferring,
+and auxiliary functions to group multiple consecutive
+OpenXR API calls. 
+
 ## Dependencies
 
 The utility classes depend only on PICO's OpenXR library. 
+
+## Architecture
+
+1. Adapter (`adapter.hpp`)
+    - Provides template-based wrapper classes for handling OpenXR objects,
+    - Embeds the `...CreateInfo` structures for the wrapped OpenXR objects to minimize the configuration efforts,
+    - Automatically initializes the wrapped OpenXR objects and destroys them during destruction.
+1. Framework Session (`session.h`, `session.cpp`)
+    - Manages the OpenXR session for SecureMR,
+    - Loads OpenXR SecureMR APIs to member function pointers on demand during the run time,
+    - Handles session initialization and cleanup.
+1. Tensor Management (`tensor.h`, `tensor.cpp`)
+    - Defines tensor attributes such as dimensions, channels, and data types,
+    - Manages tensor creation and destruction using SecureMR API calls,
+    - Interacts with the Pipeline to process tensor-based computations.
+1. Render Commands (`rendercommand.h`, `rendercommand.cpp`)
+    - Encapsulates OpenXR SecureMR operators for rendering,
+    - Allows using literal value or C++ variables as operands besides tensors,
+    - Provides an interface for integrating rendering into SecureMR workflows.
+1. Pipeline (`pipeline.h`, `pipeline.cpp`)
+    - Encapsulates data-processing operators in the OpenXR SecureMR extension,
+    - Supports the invokation of Render Commands,
+    - Manages the submission of SecureMR pipelines.
 
 ## Key usage
 
