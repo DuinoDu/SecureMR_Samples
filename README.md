@@ -15,7 +15,8 @@ customized MR-based effects with deployment of open-sourced
 machine learning algorithms. 
 
 Additionally, the project provides a set of utility classes,
-located under `./base/securemr_utils` to simplify your
+located under [`./base/securemr_utils`](base/securemr_utils/README.md)
+to simplify your
 development of SecureMR-enabled applications. 
 
 A docker file together with necessary resources are also 
@@ -97,5 +98,9 @@ deploy your own algorithm packages.
   1. `ufo-origin`, the same demo as `ufo`, but written using direct calls to the OpenXR C-API, with no 
       simplification using SecureMR Utils classes. 
 1. Connect to a PICO 4 Ultra device with the latest OS update installed
-1. Select the module you want to run, and click the launch button. 
+1. Select the module you want to run, and click the launch button.
 
+## PICO Developer Reference 
+
+You can view the full SecureMR document via
+[this link to PICO Developer website](https://developer-cn.picoxr.com/document/native/securemr-overview/). 
