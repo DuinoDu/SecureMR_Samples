@@ -14,6 +14,7 @@
 #include "openxr_program.h"
 
 AAssetManager* g_assetManager;
+std::string g_internalDataPath;
 
 namespace {
 
@@ -189,6 +190,11 @@ void android_main(struct android_app* app) {
 
     AAssetManager* assetManager = app->activity->assetManager;
     g_assetManager = assetManager;
+    if (app->activity->internalDataPath != nullptr) {
+      g_internalDataPath = app->activity->internalDataPath;
+    } else {
+      g_internalDataPath.clear();
+    }
 
     AndroidAppState appState = {};
 

@@ -19,4 +19,4 @@ include 'samples:ufo'
 include 'samples:pose'
 include 'samples:ufo_origin'
 include 'samples:yolo_det'
-
+include 'samples:mnistwild'

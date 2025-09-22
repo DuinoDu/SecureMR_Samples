@@ -27,6 +27,7 @@ if (USE_SECURE_MR_UTILS)
     list(APPEND SECUREMR_UTILS_SRCS
         ${CMAKE_CURRENT_LIST_DIR}/securemr_utils/pipeline.cpp
         ${CMAKE_CURRENT_LIST_DIR}/securemr_utils/rendercommand.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/securemr_utils/serialization.cpp
         ${CMAKE_CURRENT_LIST_DIR}/securemr_utils/session.cpp
         ${CMAKE_CURRENT_LIST_DIR}/securemr_utils/tensor.cpp
     )
