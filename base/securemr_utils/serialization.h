@@ -41,6 +41,10 @@ Json TensorListToJson(const std::vector<std::string>& tensors);
 Json MappedTensorListToJson(const std::vector<std::pair<std::string, std::string>>& mapping);
 bool WriteJsonToFile(const std::filesystem::path& filePath, const Json& spec);
 
+// Set top-level pipeline inputs/outputs in a JSON spec
+void SetInputs(Json& spec, const std::vector<std::string>& inputs);
+void SetOutputs(Json& spec, const std::vector<std::string>& outputs);
+
 bool JsonToTensorAttribute(const Json& j, TensorAttribute& out);
 std::vector<std::string> ParseTensorList(const Json& arr);
 std::vector<std::pair<std::string, std::string>> ParseMappedTensorList(const Json& arr);

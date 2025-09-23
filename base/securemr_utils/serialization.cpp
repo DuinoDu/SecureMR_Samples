@@ -24,6 +24,11 @@
 #include "pipeline.h"
 #include "tensor.h"
 
+#ifdef XR_USE_PLATFORM_ANDROID
+#include <android/asset_manager.h>
+extern AAssetManager* g_assetManager;
+#endif
+
 namespace SecureMR {
 
 Json TensorAttributeToJson(const TensorAttribute& attr) {
@@ -62,6 +67,14 @@ Json MappedTensorListToJson(const std::vector<std::pair<std::string, std::string
     arr.push_back(entry);
   }
   return arr;
+}
+
+void SetInputs(Json& spec, const std::vector<std::string>& inputs) {
+  spec["inputs"] = TensorListToJson(inputs);
+}
+
+void SetOutputs(Json& spec, const std::vector<std::string>& outputs) {
+  spec["outputs"] = TensorListToJson(outputs);
 }
 
 bool WriteJsonToFile(const std::filesystem::path& filePath, const Json& spec) {
@@ -259,15 +272,28 @@ bool DeserializePipelineFromJson(const Json& spec,
                                requireByIndex(outputs, 2, "camera_access output"),
                                requireByIndex(outputs, 3, "camera_access output"));
       } else if (type == "get_affine") {
-        std::array<float, 6> src{};
-        std::array<float, 6> dst{};
-        if (!JsonToFloatArray(opSpec["src_points"], src) || !JsonToFloatArray(opSpec["dst_points"], dst)) {
-          throw std::runtime_error("get_affine points malformed");
-        }
         if (outputs.empty()) {
           throw std::runtime_error("get_affine requires output tensor");
         }
-        pipeline->getAffine(src, dst, requireTensor(outputs.front()));
+
+        // Support two forms:
+        // 1) src_points/dst_points provided as float arrays in JSON attributes
+        // 2) src/dst provided as input tensors via inputs[0], inputs[1]
+        if (opSpec.contains("src_points") && opSpec.contains("dst_points")) {
+          std::array<float, 6> src{};
+          std::array<float, 6> dst{};
+          if (!JsonToFloatArray(opSpec["src_points"], src) || !JsonToFloatArray(opSpec["dst_points"], dst)) {
+            throw std::runtime_error("get_affine points malformed");
+          }
+          pipeline->getAffine(src, dst, requireTensor(outputs.front()));
+        } else if (inputs.size() >= 2) {
+          // Fallback: take src/dst points from input tensors
+          const auto srcTensor = requireByIndex(inputs, 0, "get_affine input");
+          const auto dstTensor = requireByIndex(inputs, 1, "get_affine input");
+          pipeline->getAffine(srcTensor, dstTensor, requireTensor(outputs.front()));
+        } else {
+          throw std::runtime_error("get_affine requires src/dst points or two input tensors");
+        }
       } else if (type == "apply_affine") {
         if (inputs.size() < 2 || outputs.empty()) {
           throw std::runtime_error("apply_affine requires two inputs and one output");
@@ -305,6 +331,85 @@ bool DeserializePipelineFromJson(const Json& spec,
           throw std::runtime_error("arithmetic requires output tensor");
         }
         pipeline->arithmetic(expression, operands, requireByIndex(outputs, 0, "arithmetic output"));
+      } else if (type == "run_algorithm") {
+        // Parse mapped inputs/outputs
+        auto mappedInputs = ParseMappedTensorList(opSpec.value("inputs", Json::array()));
+        auto mappedOutputs = ParseMappedTensorList(opSpec.value("outputs", Json::array()));
+        if (mappedInputs.empty() || mappedOutputs.empty()) {
+          throw std::runtime_error("run_algorithm inputs/outputs malformed");
+        }
+
+        std::unordered_map<std::string, std::shared_ptr<PipelineTensor>> inputMap;
+        for (const auto& [alias, tensorName] : mappedInputs) {
+          inputMap.emplace(alias, requireTensor(tensorName));
+        }
+        std::unordered_map<std::string, std::shared_ptr<PipelineTensor>> outputMap;
+        for (const auto& [alias, tensorName] : mappedOutputs) {
+          outputMap.emplace(alias, requireTensor(tensorName));
+        }
+
+        const std::string modelName = opSpec.value("model_name", "");
+        if (modelName.empty()) {
+          throw std::runtime_error("run_algorithm requires 'model_name'");
+        }
+
+        // Load model from asset (Android) or file (if provided)
+        std::vector<char> modelBuffer;
+        if (auto assetIt = opSpec.find("model_asset"); assetIt != opSpec.end() && assetIt->is_string()) {
+          const std::string assetName = assetIt->get<std::string>();
+#ifdef XR_USE_PLATFORM_ANDROID
+          if (g_assetManager == nullptr) {
+            throw std::runtime_error("run_algorithm: AssetManager not available for 'model_asset'");
+          }
+          AAsset* asset = AAssetManager_open(g_assetManager, assetName.c_str(), AASSET_MODE_BUFFER);
+          if (asset == nullptr) {
+            throw std::runtime_error(Fmt("run_algorithm: unable to open asset '%s'", assetName.c_str()));
+          }
+          const off_t length = AAsset_getLength(asset);
+          modelBuffer.resize(static_cast<size_t>(length));
+          const int64_t read = AAsset_read(asset, modelBuffer.data(), length);
+          AAsset_close(asset);
+          if (read != length) {
+            modelBuffer.clear();
+            throw std::runtime_error(Fmt("run_algorithm: read %ld of %ld bytes from asset '%s'",
+                                         static_cast<long>(read), static_cast<long>(length), assetName.c_str()));
+          }
+#else
+          throw std::runtime_error("run_algorithm: 'model_asset' only supported on Android builds");
+#endif
+        } else if (auto fileIt = opSpec.find("model_file"); fileIt != opSpec.end() && fileIt->is_string()) {
+          const std::string filePath = fileIt->get<std::string>();
+          std::ifstream ifs(filePath, std::ios::binary);
+          if (!ifs) {
+            throw std::runtime_error(Fmt("run_algorithm: cannot open file '%s'", filePath.c_str()));
+          }
+          modelBuffer.assign(std::istreambuf_iterator<char>(ifs), std::istreambuf_iterator<char>());
+          if (modelBuffer.empty()) {
+            throw std::runtime_error(Fmt("run_algorithm: file '%s' is empty or read failed", filePath.c_str()));
+          }
+        } else {
+          throw std::runtime_error("run_algorithm requires 'model_asset' (Android) or 'model_file'");
+        }
+
+        std::unordered_map<std::string, std::string> operandAliasing;
+        std::unordered_map<std::string, std::string> resultAliasing;
+        if (auto inAlias = opSpec.find("input_aliasing"); inAlias != opSpec.end() && inAlias->is_object()) {
+          for (auto it = inAlias->begin(); it != inAlias->end(); ++it) {
+            if (it.value().is_string()) {
+              operandAliasing.emplace(it.key(), it.value().get<std::string>());
+            }
+          }
+        }
+        if (auto outAlias = opSpec.find("output_aliasing"); outAlias != opSpec.end() && outAlias->is_object()) {
+          for (auto it = outAlias->begin(); it != outAlias->end(); ++it) {
+            if (it.value().is_string()) {
+              resultAliasing.emplace(it.key(), it.value().get<std::string>());
+            }
+          }
+        }
+
+        pipeline->runAlgorithm(modelBuffer.data(), modelBuffer.size(), inputMap, operandAliasing, outputMap,
+                               resultAliasing, modelName);
       } else {
         bool handled = false;
         if (options.customOperatorHandler) {
