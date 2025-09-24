@@ -28,15 +28,6 @@ constexpr char kInferencePipelineJson[] = "mnist_inference_pipeline.json";
 constexpr char kTensorPredictedClass[] = "predicted_class";
 constexpr char kTensorPredictedScore[] = "predicted_score";
 constexpr char kTensorCropImage[] = "cropped_image";
-constexpr char kTensorRightEye[] = "right_eye_uint8";
-constexpr char kTensorLeftEye[] = "left_eye_uint8";
-constexpr char kTensorTimestamp[] = "timestamp_tensor";
-constexpr char kTensorCameraMatrix[] = "camera_matrix_tensor";
-constexpr char kTensorAffine[] = "affine_tensor";
-constexpr char kTensorCropRgb[] = "crop_rgb_tensor";
-constexpr char kTensorCropGray[] = "crop_gray_tensor";
-constexpr char kTensorCropFloat[] = "crop_float_tensor";
-constexpr char kTensorNormalized[] = "normalized_input_tensor";
 
 std::filesystem::path ResolveWritablePath(const std::string& fileName) {
   if (!g_internalDataPath.empty()) {
